@@ -1,0 +1,11 @@
+{
+    "name": "lbs.js",
+    "description": "lbs powered by node.js",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+        "express": "3.x",
+        "geohash": "0.x",
+        "redis": "0.8.x"
+    }
+}
