@@ -1,7 +1,7 @@
 var app = require('express')();
-_redis = require('redis').createClient(6379, '192.168.1.125');
+_redis = require('redis').createClient(6379, '127.0.0.1');
 _redis.on("error", function (err) {
-    console.log("Redis Error: " + err);
+    //console.log("Redis Error: " + err);
 });
 
 _redis.on("connect", function () {
@@ -10,46 +10,34 @@ _redis.on("connect", function () {
 
 Location = require('./location').Location;
 
-app.get('/set/:name/:value', function (req, res) {
-    if (req.params.name && req.params.value) {
-        app.redis.set(req.params.name, req.params.value);
-    }
-    res.status(201);
-    res.send();
-});
-
-app.get('/get/:name', function(req, res) {
-    if (req.params.name) {
-        app.redis.get(req.params.name, function (err, ret) {
-            res.send(ret);
-        });
-    }
-});
-
-app.get('/user/:id/location/:lng/:lat', function (req, res) {
+app.get('/user/:id/location/:lat/:lng', function (req, res) {
     var id = req.params.id;
-    var lng = req.params.lng;
     var lat = req.params.lat;
+    var lng = req.params.lng;
 
     if (id && lat && lng) {
         l = new Location(id);
         l.setRedis(app.redis);
-        l.update(lat, lng);
+        l.update(id, lat, lng);
     }
+
     res.status(201);
     res.send();
 });
 
-app.get('/neighbors/:lng/:lat', function (req, res) {
+app.get('/neighbors/:lat/:lng', function (req, res) {
     var lat = req.params.lat;
-    var lat = req.params.lng;
+    var lng = req.params.lng;
 
     if (lat && lng) {
-        l = new Location(id);
-        l.getNeighbors(lng, lat, function (ids) {
-            res.send(ids);
+        l = new Location();
+        l.setRedis(app.redis);
+        l.getNeighbors(lat, lng, function (ids) {
+            res.setHeader('Content-Type', 'application/json');
+            res.send(JSON.stringify(ids));
         });
     }
 });
 
-app.listen(3000);
+//app.listen(3000, '0.0.0.0');
+exports.app = app;
