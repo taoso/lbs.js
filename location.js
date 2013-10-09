@@ -25,41 +25,61 @@ var Location = (function () {
 
     var geohash = require('geohash').GeoHash;
 
-    _location.prototype.update = function (id, lng, lat) {
+    _location.prototype.update = function (id, lat, lng) {
         self = this;
         self.redis.hgetall(self.getInfoKey(id), function (err, obj) {
-            if (obj && obj.oldLng && obj.oldLat) {
-                hash = geohash.encodeGeoHash(obj.oldLat, obj.oldLng);
+            if (obj && obj.lat && obj.lng) {
+                var hash = geohash.encodeGeoHash(obj.lat, obj.lng);
                 self.redis.srem(self.getKey(hash), id);
             }
 
             self.redis.hmset(self.getInfoKey(id), 'lat', lat, 'lng', lng);
 
-            var hash = geohash.encodeGeoHash(lng, lat);
+            var hash = geohash.encodeGeoHash(lat, lng);
             self.redis.sadd(self.getKey(hash), id);
         });
     };
 
     _location.prototype.getNeighbors = function (lat, lng, callback) {
-        var hash = geohash.encodeGeoHash(lat, lng).substr(0, this.KeyLen);
-        var ids = []
         self = this;
-        this.redis.smembers(this.getKey(hash), function (error, result) {
-            if (result) {
-                ids = result;
-            }
-            var n = geohash.calculateAdjacent(hash, 'top');
-            [ 'right', 'bottom', 'bottom', 'left', 'left', 'top', 'top'
-            ].forEach(function (e, i, a) {
-                n = geohash.calculateAdjacent(n, e);
-                self.redis.smembers(self.getKey(n), function (error, result) {
-                    if (result) {
-                        ids = ids.concat(result);
-                    }
-                    if (i === a.length - 1) {
-                        return callback(ids);
+
+        var hash = geohash.encodeGeoHash(lat, lng).substr(0, this.keyLen);
+
+        var multi = self.redis.multi();
+        multi.smembers(self.getKey(hash));
+
+        ['top', 'right', 'bottom', 'bottom',
+            'left', 'left', 'top', 'top'].forEach(function (d, i, a) {
+                hash = geohash.calculateAdjacent(hash, d);
+                multi.smembers(self.getKey(hash));
+            });
+
+        multi.exec(function (error, replies) {
+            var ids = [];
+            if (replies) {
+                replies.forEach(function (e, i, a) {
+                    if (e) {
+                        ids = ids.concat(e);
                     }
                 });
+            }
+
+            var _ids = {};
+            var multi = self.redis.multi();
+            ids.forEach(function (id, i, a) {
+                if (!_ids[id]) {
+                    _ids[id] = true;
+                    multi.hgetall(self.getInfoKey(id), function (error, result) {
+                        if (result) {
+                            result['id'] = id;
+                            return result;
+                        }
+                    });
+                }
+            });
+
+            multi.exec(function (error, replies) {
+                return callback(replies);
             });
         });
     };
